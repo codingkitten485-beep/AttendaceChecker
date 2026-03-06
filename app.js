@@ -524,6 +524,7 @@ function update() {
         {
           label:           'If you attend',
           data:            gFull,
+          borderDash: [4, 3],   // ← add this line to make it dotted
           borderColor:     isDark ? '#4BE89A' : '#00915A',
           backgroundColor: gGrad,
           fill:            true,
