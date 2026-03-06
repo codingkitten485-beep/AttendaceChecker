@@ -1,0 +1,524 @@
+/* ============================================================
+   style.css — Attendance Analyser
+   
+   Structure:
+     1. CSS Custom Properties (design tokens)
+     2. Base / Reset
+     3. Layout (3-column grid)
+     4. Top Bar
+     5. Left Panel (inputs)
+     6. Center Panel (chart)
+     7. Right Panel (insights)
+     8. Bottom Status Bar
+     9. Utility / misc (confetti dots, empty state)
+   
+   Theming:
+     Toggle between dark/light by setting data-theme="dark"
+     or data-theme="light" on the <html> element.
+     All colours are CSS variables — edit the blocks below
+     to retheme without touching anything else.
+   ============================================================ */
+
+
+/* ── 1. DESIGN TOKENS ─────────────────────────────────────── */
+
+:root {
+  --serif: 'DM Serif Display', serif;
+  --sans:  'Plus Jakarta Sans', sans-serif;
+
+  --r:   14px;   /* border-radius for cards */
+  --rsm:  8px;   /* border-radius for inputs */
+
+  --ease:  cubic-bezier(.34, 1.56, .64, 1);   /* springy overshoot */
+  --trans: .35s cubic-bezier(.4, 0, .2, 1);   /* smooth theme transition */
+}
+
+/* Dark theme colours */
+[data-theme="dark"] {
+  --bg:     #0E0E12;
+  --panel:  #16161C;
+  --raised: #1E1E26;
+  --line:   rgba(255, 255, 255, 0.07);
+  --txt:    #EEEEF5;
+  --txt2:   #7070A0;
+  --txt3:   #45455A;
+  --acc:    #E8B84B;   /* warm amber  — primary accent */
+  --acc2:   #4BDDE8;   /* teal        — secondary accent */
+  --green:  #4BE89A;
+  --red:    #E84B6A;
+  --shadow: 0 2px 24px rgba(0, 0, 0, 0.5);
+  --inp-bg: #1E1E26;
+}
+
+/* Light theme colours */
+[data-theme="light"] {
+  --bg:     #F4F3EF;
+  --panel:  #FFFFFF;
+  --raised: #F0EFE9;
+  --line:   rgba(0, 0, 0, 0.08);
+  --txt:    #16161C;
+  --txt2:   #6060A0;
+  --txt3:   #AEAEC8;
+  --acc:    #3D3DBF;   /* deep indigo — primary accent */
+  --acc2:   #008A99;   /* teal        — secondary accent */
+  --green:  #00915A;
+  --red:    #CC2244;
+  --shadow: 0 2px 16px rgba(0, 0, 0, 0.08);
+  --inp-bg: #F0EFE9;
+}
+
+
+/* ── 2. BASE / RESET ──────────────────────────────────────── */
+
+*, *::before, *::after {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+}
+
+html, body {
+  height: 100%;
+  width: 100%;
+  overflow: hidden;    /* no scrollbars — app fills viewport exactly */
+}
+
+body {
+  background: var(--bg);
+  color: var(--txt);
+  font-family: var(--sans);
+  font-size: 15px;
+  /* smooth colour transition when toggling theme */
+  transition: background var(--trans), color var(--trans);
+  position: relative;
+}
+
+
+/* ── 3. LAYOUT ────────────────────────────────────────────── */
+
+/* Particle canvas sits behind everything */
+#pc {
+  position: fixed;
+  inset: 0;
+  z-index: 0;
+  pointer-events: none;
+  opacity: .9;
+}
+
+/* Main 3-column grid:
+   col 1 (280px) = left inputs
+   col 2 (1fr)   = center chart
+   col 3 (300px) = right insights
+   row 1 (auto)  = top bar
+   row 2 (1fr)   = panels
+   row 3 (auto)  = bottom bar          */
+#app {
+  position: relative;
+  z-index: 1;
+  height: 100vh;
+  display: grid;
+  grid-template-columns: 280px 1fr 300px;
+  grid-template-rows: auto 1fr auto;
+  gap: 0;
+}
+
+
+/* ── 4. TOP BAR ───────────────────────────────────────────── */
+
+#topbar {
+  grid-column: 1 / -1;
+  height: 56px;
+  display: flex;
+  align-items: center;
+  padding: 0 2rem;
+  border-bottom: 1px solid var(--line);
+  background: var(--panel);
+  justify-content: space-between;
+  opacity: 0;   /* animated in by anime.js on load */
+}
+
+.brand {
+  font-family: var(--serif);
+  font-size: 1.25rem;
+  color: var(--txt);
+  letter-spacing: -.01em;
+}
+.brand em {
+  color: var(--acc);
+  font-style: italic;
+}
+
+.topbar-right {
+  display: flex;
+  align-items: center;
+  gap: 1.2rem;
+}
+
+/* Pill toggle button for dark/light mode */
+.theme-btn {
+  width: 40px;
+  height: 22px;
+  background: var(--raised);
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  cursor: pointer;
+  position: relative;
+  outline: none;
+  flex-shrink: 0;
+}
+/* The sliding circle inside the pill */
+.theme-btn::after {
+  content: '';
+  position: absolute;
+  top: 3px;
+  left: 3px;
+  width: 16px;
+  height: 16px;
+  border-radius: 50%;
+  background: var(--acc);
+  transition: transform .35s var(--ease);
+}
+/* Slide circle to the right in light mode */
+[data-theme="light"] .theme-btn::after {
+  transform: translateX(18px);
+}
+
+.topbar-label {
+  font-size: .72rem;
+  letter-spacing: .12em;
+  text-transform: uppercase;
+  color: var(--txt2);
+  font-weight: 600;
+}
+
+
+/* ── 5. LEFT PANEL — INPUTS ───────────────────────────────── */
+
+#left {
+  grid-column: 1;
+  grid-row: 2 / 4;
+  background: var(--panel);
+  border-right: 1px solid var(--line);
+  padding: 2rem 1.6rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0;
+  opacity: 0;   /* animated in on load */
+}
+
+.panel-label {
+  font-size: .65rem;
+  letter-spacing: .18em;
+  text-transform: uppercase;
+  color: var(--txt3);
+  font-weight: 700;
+  margin-bottom: 1.6rem;
+}
+
+/* Each labelled input group */
+.inp-group {
+  margin-bottom: 1.6rem;
+}
+
+.inp-question {
+  font-size: .82rem;
+  color: var(--txt2);
+  font-weight: 500;
+  margin-bottom: .5rem;
+  line-height: 1.45;
+}
+
+.inp-wrap {
+  position: relative;
+}
+
+/* Number inputs — large italic serif style */
+input[type="number"] {
+  width: 100%;
+  background: var(--inp-bg);
+  border: 1.5px solid var(--line);
+  border-radius: var(--rsm);
+  color: var(--txt);
+  font-family: var(--serif);
+  font-size: 1.6rem;
+  font-style: italic;
+  padding: .5rem .85rem;
+  outline: none;
+  transition: border-color .2s, box-shadow .2s, background var(--trans);
+  -moz-appearance: textfield;   /* hide Firefox spin arrows */
+  line-height: 1.2;
+}
+/* Hide Webkit spin arrows */
+input[type="number"]::-webkit-inner-spin-button,
+input[type="number"]::-webkit-outer-spin-button {
+  -webkit-appearance: none;
+}
+input[type="number"]:focus {
+  border-color: var(--acc);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--acc) 18%, transparent);
+}
+input[type="number"]::placeholder {
+  color: var(--txt3);
+  font-style: italic;
+}
+
+/* Attendance % chip — pinned to bottom of left panel */
+.att-chip {
+  margin-top: auto;
+  padding-top: 1.6rem;
+  border-top: 1px solid var(--line);
+}
+.att-chip-label {
+  font-size: .65rem;
+  letter-spacing: .18em;
+  text-transform: uppercase;
+  color: var(--txt3);
+  font-weight: 700;
+  margin-bottom: .4rem;
+}
+.att-chip-val {
+  font-family: var(--serif);
+  font-size: 3.5rem;
+  font-style: italic;
+  line-height: 1;
+  color: var(--acc);
+  transition: color .3s;
+  /* colour changes: green ≥75%, amber 60-74%, red <60% */
+}
+.att-chip-sub {
+  font-size: .75rem;
+  color: var(--txt2);
+  margin-top: .25rem;
+  line-height: 1.5;
+  min-height: 1.2rem;
+}
+
+
+/* ── 6. CENTER PANEL — CHART ──────────────────────────────── */
+
+#center {
+  grid-column: 2;
+  grid-row: 2 / 4;
+  background: var(--bg);
+  display: flex;
+  flex-direction: column;
+  padding: 1.8rem 1.8rem 1.4rem;
+  opacity: 0;
+  min-height: 0;   /* allow flex child to shrink */
+}
+
+#center-top {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 1.2rem;
+  flex-shrink: 0;
+}
+
+.chart-title {
+  font-family: var(--serif);
+  font-size: 1.3rem;
+  font-style: italic;
+  color: var(--txt);
+  letter-spacing: -.01em;
+}
+
+.chart-legend {
+  display: flex;
+  gap: 1.1rem;
+  align-items: center;
+}
+.leg {
+  display: flex;
+  align-items: center;
+  gap: .35rem;
+  font-size: .7rem;
+  color: var(--txt2);
+  font-weight: 600;
+}
+.leg-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+}
+
+/* Chart canvas wrapper — fills remaining height */
+#main-chart-wrap {
+  flex: 1;
+  position: relative;
+  min-height: 0;
+}
+#main-chart-wrap canvas {
+  position: absolute;
+  inset: 0;
+}
+
+
+/* ── 7. RIGHT PANEL — INSIGHTS ────────────────────────────── */
+
+#right {
+  grid-column: 3;
+  grid-row: 2 / 4;
+  background: var(--panel);
+  border-left: 1px solid var(--line);
+  padding: 2rem 1.6rem;
+  display: flex;
+  flex-direction: column;
+  gap: 1.4rem;
+  opacity: 0;
+  overflow: hidden;
+}
+
+/* Insight card — coloured border indicates good/bad/neutral */
+.insight-block {
+  padding: 1.2rem 1.1rem;
+  border-radius: var(--r);
+  border: 1.5px solid var(--line);
+  background: var(--raised);
+  transition: background var(--trans), border-color .3s;
+}
+.insight-block.good { border-color: color-mix(in srgb, var(--green) 35%, transparent); }
+.insight-block.bad  { border-color: color-mix(in srgb, var(--red)   35%, transparent); }
+.insight-block.neu  { border-color: color-mix(in srgb, var(--acc2)  35%, transparent); }
+
+.ib-label {
+  font-size: .63rem;
+  letter-spacing: .16em;
+  text-transform: uppercase;
+  color: var(--txt2);
+  font-weight: 700;
+  margin-bottom: .4rem;
+  display: flex;
+  align-items: center;
+  gap: .4rem;
+}
+.ib-dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+
+/* Large animated number inside each insight card */
+.ib-num {
+  font-family: var(--serif);
+  font-size: 3.2rem;
+  font-style: italic;
+  line-height: 1;
+  display: block;
+  margin-bottom: .2rem;
+  transition: color .3s;
+}
+.ib-num.good { color: var(--green); }
+.ib-num.bad  { color: var(--red);   }
+.ib-num.neu  { color: var(--acc2);  }
+
+.ib-desc {
+  font-size: .78rem;
+  color: var(--txt2);
+  font-weight: 500;
+  line-height: 1.5;
+}
+
+/* 2-column grid for rise/fall mini sparkline cards */
+.mini-charts {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: .8rem;
+  flex-shrink: 0;
+}
+
+.mini-card {
+  background: var(--raised);
+  border: 1.5px solid var(--line);
+  border-radius: var(--r);
+  padding: .9rem .9rem .7rem;
+  transition: background var(--trans);
+}
+.mini-label {
+  font-size: .6rem;
+  letter-spacing: .15em;
+  text-transform: uppercase;
+  color: var(--txt3);
+  font-weight: 700;
+  margin-bottom: .3rem;
+}
+.mini-val {
+  font-family: var(--serif);
+  font-size: 1.4rem;
+  font-style: italic;
+  line-height: 1;
+  margin-bottom: .4rem;
+}
+.mini-chart-wrap {
+  height: 52px;
+  position: relative;
+}
+.mini-chart-wrap canvas {
+  position: absolute;
+  inset: 0;
+}
+
+
+/* ── 8. BOTTOM STATUS BAR ─────────────────────────────────── */
+
+#bottom {
+  grid-column: 1 / -1;
+  height: 36px;
+  border-top: 1px solid var(--line);
+  background: var(--panel);
+  display: flex;
+  align-items: center;
+  padding: 0 2rem;
+  gap: 2rem;
+  opacity: 0;
+}
+
+.status-item {
+  font-size: .68rem;
+  color: var(--txt3);
+  display: flex;
+  align-items: center;
+  gap: .4rem;
+  font-weight: 500;
+}
+.status-val {
+  color: var(--txt2);
+  font-family: var(--serif);
+  font-style: italic;
+  font-size: .85rem;
+}
+
+
+/* ── 9. UTILITY ───────────────────────────────────────────── */
+
+/* Empty state shown before any input is entered */
+.empty-state {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-direction: column;
+  gap: .5rem;
+  opacity: 0;
+  transition: opacity .3s;
+}
+.empty-state.visible { opacity: 1; }
+.es-icon {
+  font-size: 2rem;
+  color: var(--txt3);
+}
+.es-txt {
+  font-size: .75rem;
+  letter-spacing: .1em;
+  text-transform: uppercase;
+  color: var(--txt3);
+  font-weight: 600;
+}
+
+/* Confetti particle dots (created and removed dynamically by JS) */
+.cdot {
+  position: fixed;
+  pointer-events: none;
+  z-index: 999;
+  border-radius: 3px;
+}

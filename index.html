@@ -1,0 +1,181 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="dark">
+<head>
+  <meta charset="UTF-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>Attendance Analyser</title>
+
+  <!-- Google Fonts -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link href="https://fonts.googleapis.com/css2?family=DM+Serif+Display:ital@0;1&family=Plus+Jakarta+Sans:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+
+  <!-- Chart.js — main trajectory chart + mini rise/fall sparklines -->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
+
+  <!-- Anime.js — entrance animations, number counters, confetti -->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/animejs/3.2.1/anime.min.js"></script>
+
+  <!-- App styles -->
+  <link rel="stylesheet" href="style.css"/>
+</head>
+<body>
+
+  <!-- Background particle canvas (drawn and animated in app.js → initParticles) -->
+  <canvas id="pc"></canvas>
+
+  <div id="app">
+
+    <!-- ═══════════════════════════════════════════════════
+         TOP BAR
+         Contains: brand name, dark/light theme toggle
+    ════════════════════════════════════════════════════ -->
+    <header id="topbar">
+      <div class="brand">Attendance <em>Analyser</em></div>
+      <div class="topbar-right">
+        <span class="topbar-label" id="mode-lbl">Dark</span>
+        <button class="theme-btn" id="theme-btn" aria-label="Toggle theme"></button>
+      </div>
+    </header>
+
+    <!-- ═══════════════════════════════════════════════════
+         LEFT PANEL — User Inputs
+         Three inputs feed the core formula:
+           x = lectures attended before the absence
+           n = consecutive lectures missed
+           k = lectures attended after coming back
+         Everything else (attended, total, att%) is derived.
+    ════════════════════════════════════════════════════ -->
+    <aside id="left">
+      <div class="panel-label">Your Data</div>
+
+      <!-- x: total lectures attended before the absence streak began -->
+      <div class="inp-group" id="ig-x">
+        <div class="inp-question">How many lectures have you attended so far?</div>
+        <div class="inp-wrap">
+          <input type="number" id="inp-x" min="0" placeholder="0"/>
+        </div>
+      </div>
+
+      <!-- n: how many consecutive lectures were missed -->
+      <div class="inp-group" id="ig-n">
+        <div class="inp-question">How many lectures did you miss in a row?</div>
+        <div class="inp-wrap">
+          <input type="number" id="inp-n" min="0" placeholder="0"/>
+        </div>
+      </div>
+
+      <!-- k: lectures attended since returning after the absence -->
+      <div class="inp-group" id="ig-k">
+        <div class="inp-question">How many lectures have you attended since coming back?</div>
+        <div class="inp-wrap">
+          <input type="number" id="inp-k" min="0" placeholder="0"/>
+        </div>
+      </div>
+
+      <!-- Live-computed attendance % with contextual message -->
+      <div class="att-chip" id="att-chip">
+        <div class="att-chip-label">Current Attendance</div>
+        <div class="att-chip-val" id="att-val">—</div>
+        <!-- If att >= 75%: "you can skip N more lectures"
+             If att < 75%:  "attend N consecutive to reach 75%" -->
+        <div class="att-chip-sub" id="att-sub">Enter your numbers above</div>
+      </div>
+    </aside>
+
+    <!-- ═══════════════════════════════════════════════════
+         CENTER PANEL — Main Trajectory Chart
+         Renders three future lines from "now":
+           Green  = if you attend every upcoming lecture
+           Red    = if you skip every upcoming lecture
+           Dashed = 75% threshold line
+         History arc is colour-coded: amber → red → teal
+    ════════════════════════════════════════════════════ -->
+    <main id="center">
+      <div id="center-top">
+        <div class="chart-title">Trajectory</div>
+        <!-- Legend is hidden (opacity:0) until data is entered -->
+        <div class="chart-legend" id="cleg" style="opacity:0">
+          <div class="leg"><div class="leg-dot" style="background:var(--acc)"></div>History</div>
+          <div class="leg"><div class="leg-dot" style="background:var(--green)"></div>If you attend</div>
+          <div class="leg"><div class="leg-dot" style="background:var(--red)"></div>If you skip</div>
+          <div class="leg"><div class="leg-dot" style="background:var(--txt3)"></div>75% line</div>
+        </div>
+      </div>
+
+      <div id="main-chart-wrap">
+        <!-- Placeholder shown before any input -->
+        <div class="empty-state visible" id="es">
+          <div class="es-icon">◇</div>
+          <div class="es-txt">Waiting for input</div>
+        </div>
+        <!-- Chart.js renders into this canvas -->
+        <canvas id="main-chart" style="display:none"></canvas>
+      </div>
+    </main>
+
+    <!-- ═══════════════════════════════════════════════════
+         RIGHT PANEL — Insights
+         ib-main: skip budget (good) OR lectures needed (bad)
+         ib-sec:  total lecture count summary
+         Mini charts: rise rate sparkline + fall rate sparkline
+    ════════════════════════════════════════════════════ -->
+    <aside id="right">
+      <div class="panel-label">Insights</div>
+
+      <!-- Primary insight block — changes between good/bad state -->
+      <div class="insight-block neu" id="ib-main">
+        <div class="ib-label">
+          <span class="ib-dot" style="background:var(--acc2)"></span>
+          <span id="ib-main-lbl">Attendance standing</span>
+        </div>
+        <span class="ib-num neu" id="ib-main-num">—</span>
+        <div class="ib-desc" id="ib-main-desc">Enter your lecture data on the left</div>
+      </div>
+
+      <!-- Secondary insight block — always shows totals -->
+      <div class="insight-block neu" id="ib-sec">
+        <div class="ib-label">
+          <span class="ib-dot" id="ib-sec-dot" style="background:var(--txt3)"></span>
+          <span id="ib-sec-lbl">Total lectures</span>
+        </div>
+        <span class="ib-num neu" id="ib-sec-num">—</span>
+        <div class="ib-desc" id="ib-sec-desc">—</div>
+      </div>
+
+      <!-- Mini sparkline cards
+           Rise  = R = (n * k) / (total * (x + n)) * 100
+           Fall  = F = -(n) / (x + n) * 100
+           See app.js → update() for full formula explanation -->
+      <div class="mini-charts">
+        <div class="mini-card">
+          <div class="mini-label">Rate of Rise</div>
+          <div class="mini-val" id="mv-r" style="color:var(--green)">—</div>
+          <div class="mini-chart-wrap"><canvas id="mini-r"></canvas></div>
+        </div>
+        <div class="mini-card">
+          <div class="mini-label">Rate of Fall</div>
+          <div class="mini-val" id="mv-f" style="color:var(--red)">—</div>
+          <div class="mini-chart-wrap"><canvas id="mini-f"></canvas></div>
+        </div>
+      </div>
+    </aside>
+
+    <!-- ═══════════════════════════════════════════════════
+         BOTTOM STATUS BAR — Quick summary strip
+    ════════════════════════════════════════════════════ -->
+    <footer id="bottom">
+      <div class="status-item">Attended <span class="status-val" id="st-att">—</span></div>
+      <div class="status-item">Missed   <span class="status-val" id="st-mis">—</span></div>
+      <div class="status-item">Total    <span class="status-val" id="st-tot">—</span></div>
+      <div class="status-item" style="margin-left:auto">
+        Projecting <span class="status-val">30</span> lectures ahead
+      </div>
+    </footer>
+
+  </div><!-- /#app -->
+
+  <!-- App logic (particles, charts, calculations, animations) -->
+  <script src="app.js"></script>
+
+</body>
+</html>
