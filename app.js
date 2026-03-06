@@ -386,57 +386,36 @@ function update() {
   const attSubEl = document.getElementById('att-sub');
 
   animNum(attEl, att, v => v.toFixed(1) + '%');
-
-  // Colour: green ≥75%, amber 60-74%, red <60%
-  attEl.style.color = att >= 75 ? 'var(--green)' : att >= 60 ? 'var(--acc)' : 'var(--red)';
-
-  if (att >= 75) {
-    const canSkip = Math.max(0, Math.floor(attended / 0.75 - total));
-    attSubEl.textContent = `You can skip ${canSkip} more lecture${canSkip === 1 ? '' : 's'}`;
-  } else {
-    const need = Math.max(0, Math.ceil((0.75 * total - attended) / 0.25));
-    attSubEl.textContent = `Attend ${need} consecutive to reach 75%`;
-  }
+  attEl.style.color = att >= 75 ? 'var(--green)' : att >= 60 ? 'var(--acc)' : 'var(--red)'; // green ≥75%, amber 60-74%, red <60%
 
   // ── Confetti — fires once when crossing 75% upward ──────
   if (att >= 75 && prevAtt < 75 && prevAtt >= 0) confetti();
   prevAtt = att;
 
-  // ── Right panel insights ────────────────────────────────
+  // ── Chip sub-text + right panel insights ───────────────
+  // Compute once, use in both the chip and the insight card
+  const totalSummary = `${attended} attended · ${n} missed`;
   if (att >= 75) {
     const canSkip = Math.max(0, Math.floor(attended / 0.75 - total));
-    setInsight('ib-main', 'good', canSkip,
-      'Lectures you can skip',
-      `Skip up to ${canSkip} and still stay above 75%`
-    );
-    setInsight('ib-sec', 'neu', total,
-      'Total lectures',
-      `${attended} attended · ${n} missed`,
-      'neu'
-    );
+    attSubEl.textContent = `You can skip ${canSkip} more lecture${canSkip === 1 ? '' : 's'}`;
+    setInsight('ib-main', 'good', canSkip, 'Lectures you can skip', `Skip up to ${canSkip} and still stay above 75%`);
   } else {
     const need = Math.max(0, Math.ceil((0.75 * total - attended) / 0.25));
-    setInsight('ib-main', 'bad', need,
-      'Lectures to attend',
-      `Attend ${need} in a row to cross 75%`
-    );
-    setInsight('ib-sec', 'neu', total,
-      'Total lectures',
-      `${attended} attended · ${n} missed`,
-      'neu'
-    );
+    attSubEl.textContent = `Attend ${need} consecutive to reach 75%`;
+    setInsight('ib-main', 'bad', need, 'Lectures to attend', `Attend ${need} in a row to cross 75%`);
   }
+  setInsight('ib-sec', 'neu', total, 'Total lectures', totalSummary, 'neu');
 
   // ── Mini sparkline charts ───────────────────────────────
-  // Simulate R (rise) over increasing k values
+  // rHist: simulate R as k increases from 0 → kRange (shows rise curve)
+  // fHist: F is constant (doesn't depend on k), fill a flat line
   const rHist = [], fHist = [];
   const kRange = Math.max(k * 2, 20);
+  const fVal = (x + n) === 0 ? 0 : -(n) / (x + n) * 100;
 
   for (let ki = 0; ki <= kRange; ki++) {
-    const ri = (x + n) === 0 ? 0 : (n * ki) / ((x + n + ki) * (x + n)) * 100;
-    const fi = (x + n) === 0 ? 0 : -(n) / (x + n) * 100;
-    rHist.push(+ri.toFixed(3));
-    fHist.push(+fi.toFixed(3));
+    rHist.push(+((x + n) === 0 ? 0 : (n * ki) / ((x + n + ki) * (x + n)) * 100).toFixed(3));
+    fHist.push(+fVal.toFixed(3));
   }
 
   const rColor = isDark ? 'rgba(75,232,154,1)'  : 'rgba(0,145,90,1)';
@@ -449,10 +428,8 @@ function update() {
   miniF = buildMiniChart('mini-f', fColor, fHist);
 
   // ── Main trajectory chart ───────────────────────────────
-  // Build the history arc point-by-point:
-  //   Amber  = lectures 1..x     (attending phase, att stays ~100%)
-  //   Red    = lectures x+1..x+n (absence phase, att drops)
-  //   Teal   = lectures x+n+1..total (recovery phase, att rises)
+  // History arc: single anchor → absence drop → recovery rise
+  // Amber = start anchor, Red = missed lectures, Teal = recovery lectures
 
   const hPts  = [];   // y values
   const hLbls = [];   // x-axis labels
@@ -460,16 +437,20 @@ function update() {
 
   const accColor = isDark ? '#E8B84B' : '#3D3DBF';
 
-  for (let i = 1; i <= x; i++) {
-    hPts.push(100);
-    hLbls.push('L' + i);
-    hCols.push(accColor);
-  }
+  // Single anchor: 100% if absences exist (true start before drop), else current att%
+  const startAtt = n > 0 ? 100 : att;
+  hPts.push(+startAtt.toFixed(2));
+  hLbls.push('S');
+  hCols.push(accColor);
+
+  // Absence phase: attendance drops as missed lectures accumulate
   for (let j = 1; j <= n; j++) {
     hPts.push(+(x / (x + j) * 100).toFixed(2));
     hLbls.push('A' + j);
     hCols.push(isDark ? '#E84B6A' : '#CC2244');
   }
+
+  // Recovery phase: attendance rises as you attend lectures after return
   for (let m = 1; m <= k; m++) {
     hPts.push(+((x + m) / (x + n + m) * 100).toFixed(2));
     hLbls.push('R' + m);
@@ -532,8 +513,8 @@ function update() {
           backgroundColor: 'rgba(0,0,0,0)',
           fill:            false,
           tension:         .3,
-          // Show dots only at phase transition points
-          pointRadius:          ci => { const i = ci.dataIndex; return (i===0 || i===x-1 || i===x+n-1 || i===pivIdx-1) ? 4 : 0; },
+          // Show dots at start, end of absence, and current point
+          pointRadius:          ci => { const i = ci.dataIndex; return (i===0 || i===n || i===pivIdx-1) ? 4 : 0; },
           pointBackgroundColor: ci => hCols[ci.dataIndex] || accColor,
           pointBorderColor:     'transparent',
           borderWidth:          2,
@@ -572,7 +553,7 @@ function update() {
         {
           label:       '75%',
           data:        thrsh,
-          borderColor: isDark ? 'rgba(255,255,255,0.15)' : 'rgba(0,0,0,0.15)',
+          borderColor: isDark ? 'rgba(246, 255, 0, 0.86)' : 'rgba(0,0,0,0.15)',
           borderDash:  [3, 3],
           borderWidth: 1,
           pointRadius: 0,
@@ -599,11 +580,11 @@ function update() {
           callbacks: {
             title: items => {
               const i = items[0].dataIndex;
-              if      (i < x)       return `Lecture ${i+1} · Attending`;
-              else if (i < x + n)   return `Lecture ${x+(i-x+1)} · Absent`;
-              else if (i < pivIdx)  return `Lecture ${x+n+(i-x-n+1)} · Recovery`;
+              if      (i === 0)      return 'Before absence · Start';
+              else if (i <= n)       return `Absence ${i} · Missed`;
+              else if (i < pivIdx)   return `Recovery ${i - n} · Returning`;
               else if (i === pivIdx) return 'Now · Current state';
-              else                  return `Future +${i - pivIdx} lectures`;
+              else                   return `Future +${i - pivIdx} lectures`;
             },
             label: item => {
               if (item.parsed.y === null)   return null;
