@@ -32,6 +32,14 @@
     <header id="topbar">
       <div class="brand">Attendance <em>Analyser</em></div>
       <div class="topbar-right">
+        <!-- Chart toggle: only visible on mobile where chart is hidden by default -->
+        <button class="chart-toggle-btn" id="chart-toggle-btn" aria-label="Toggle chart" title="Show/hide chart">
+          <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round">
+            <polyline points="1,12 5,7 8,9 12,4 15,6"/>
+            <line x1="1" y1="15" x2="15" y2="15"/>
+          </svg>
+          <span>Chart</span>
+        </button>
         <span class="topbar-label" id="mode-lbl">Dark</span>
         <button class="theme-btn" id="theme-btn" aria-label="Toggle theme"></button>
       </div>
@@ -72,6 +80,18 @@
         </div>
       </div>
 
+      <!-- Validation warning: shown when inputs are logically inconsistent -->
+      <div class="inp-warning" id="inp-warning" style="display:none">
+        <span class="warn-icon">&#9888;</span>
+        <span id="warn-msg"></span>
+      </div>
+
+      <!-- Mobile-only nudge: tells users a chart is available on desktop -->
+      <div class="mob-chart-note">
+        <span class="mob-chart-note-icon">📊</span>
+        <span>Open on desktop to see the trajectory chart</span>
+      </div>
+
       <!-- Live-computed attendance % with contextual message -->
       <div class="att-chip" id="att-chip">
         <div class="att-chip-label">Current Attendance</div>
@@ -98,7 +118,7 @@
           <div class="leg"><div class="leg-dot" style="background:var(--acc)"></div>History</div>
           <div class="leg"><div class="leg-dot" style="background:var(--green)"></div>If you attend</div>
           <div class="leg"><div class="leg-dot" style="background:var(--red)"></div>If you skip</div>
-          <div class="leg"><div class="leg-dot" style="background:var(--txt3)"></div>75% line</div>
+          <div class="leg"><div class="leg-dot" style="background:var(--acc);opacity:0.55"></div>75% line</div>
         </div>
       </div>
 
