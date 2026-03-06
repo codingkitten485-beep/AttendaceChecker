@@ -363,6 +363,20 @@ function update() {
     return;
   }
 
+  // ── Input validation warnings ───────────────────────────
+  // Show a warning for logically inconsistent states but still compute
+  const warnEl  = document.getElementById('inp-warning');
+  const warnMsg = document.getElementById('warn-msg');
+  if (k > 0 && n === 0) {
+    warnMsg.textContent = 'Recovery lectures need a missed streak (n) first';
+    warnEl.style.display = 'flex';
+  } else if (k > x + n) {
+    warnMsg.textContent = 'Recovery lectures can\'t exceed total lectures held';
+    warnEl.style.display = 'flex';
+  } else {
+    warnEl.style.display = 'none';
+  }
+
   // ── Derived values ──────────────────────────────────────
   const attended = x + k;
   const total    = x + n + k;
@@ -407,15 +421,17 @@ function update() {
   setInsight('ib-sec', 'neu', total, 'Total lectures', totalSummary, 'neu');
 
   // ── Mini sparkline charts ───────────────────────────────
-  // rHist: simulate R as k increases from 0 → kRange (shows rise curve)
-  // fHist: F is constant (doesn't depend on k), fill a flat line
+  // Rise chart: simulate R as k increases (shows recovery curve)
+  // Fall chart: simulate F as n increases (shows how bad it gets the more you miss)
   const rHist = [], fHist = [];
   const kRange = Math.max(k * 2, 20);
-  const fVal = (x + n) === 0 ? 0 : -(n) / (x + n) * 100;
+  const nRange = Math.max(n * 2, 20);
 
   for (let ki = 0; ki <= kRange; ki++) {
     rHist.push(+((x + n) === 0 ? 0 : (n * ki) / ((x + n + ki) * (x + n)) * 100).toFixed(3));
-    fHist.push(+fVal.toFixed(3));
+  }
+  for (let ni = 0; ni <= nRange; ni++) {
+    fHist.push(+(x + ni === 0 ? 0 : -(ni) / (x + ni) * 100).toFixed(3));
   }
 
   const rColor = isDark ? 'rgba(75,232,154,1)'  : 'rgba(0,145,90,1)';
@@ -423,6 +439,8 @@ function update() {
 
   document.getElementById('mv-r').textContent = '+' + R.toFixed(3) + '%';
   document.getElementById('mv-f').textContent = F.toFixed(2) + '%';
+  // Restore the static label
+  document.querySelector('#mini-f').closest('.mini-card').querySelector('.mini-label').textContent = 'Rate of Fall';
 
   miniR = buildMiniChart('mini-r', rColor, rHist);
   miniF = buildMiniChart('mini-f', fColor, fHist);
@@ -550,13 +568,13 @@ function update() {
           pointBorderColor:     'transparent',
           spanGaps:             false,
         },
-        // Dataset 3: 75% threshold reference line
+        // Dataset 3: 75% threshold reference line — amber dashed, clearly visible
         {
           label:       '75%',
           data:        thrsh,
-          borderColor: isDark ? 'rgba(246, 255, 0, 0.86)' : 'rgba(0,0,0,0.15)',
-          borderDash:  [3, 3],
-          borderWidth: 1,
+          borderColor: isDark ? 'rgba(232,184,75,0.55)' : 'rgba(61,61,191,0.45)',
+          borderDash:  [6, 4],
+          borderWidth: 1.5,
           pointRadius: 0,
           fill:        false,
         },
@@ -589,6 +607,7 @@ function update() {
             },
             label: item => {
               if (item.parsed.y === null)   return null;
+              if (item.datasetIndex === 0 && item.dataIndex >= pivIdx) return null; // hide history in future zone
               if (item.datasetIndex === 3)  return ` Threshold · 75%`;
               return ` ${item.dataset.label} · ${item.parsed.y.toFixed(1)}%`;
             },
@@ -597,7 +616,8 @@ function update() {
       },
       scales: {
         x: {
-          ticks:  { color: c.tick, font: { family: "'Plus Jakarta Sans',sans-serif", size: 10 }, maxTicksLimit: 14 },
+          ticks:  { color: c.tick, font: { family: "'Plus Jakarta Sans',sans-serif", size: 10 }, maxTicksLimit: 14,
+                    callback: (val, i) => { const lbl = allLbls[i]; return lbl === 'S' ? '' : lbl; } },
           grid:   { color: c.grid },
           border: { color: c.bord },
         },
@@ -679,6 +699,7 @@ function resetUI() {
   document.getElementById('att-val').textContent  = '—';
   document.getElementById('att-sub').textContent  = 'Enter your numbers above';
   document.getElementById('att-val').style.color  = 'var(--acc)';
+  document.getElementById('inp-warning').style.display = 'none';
 
   document.getElementById('es').classList.add('visible');
   document.getElementById('main-chart').style.display = 'none';
